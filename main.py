@@ -69,7 +69,6 @@ def main_interactive(config: dict):
             '-show-icons',
             '-theme-str', 'window {width: 80%;}',
             '-theme-str', 'configuration {font: "JetBrains Mono 14";}',
-            '-theme-str', '@import "~/.config/rofi/themes/catppuccin-mocha.rasi"',
         ],
         input=rofi_input_str, capture_output=True, text=True
     )
