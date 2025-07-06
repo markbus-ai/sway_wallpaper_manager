@@ -92,12 +92,13 @@ def main_interactive(config: dict):
 def print_help():
     """Imprime un mensaje de ayuda detallado."""
     script_name = "sway-wallpaper"
-    print(f"Gestor de fondos de pantalla para Sway con miniaturas en Rofi.")
+    print(f"Gestor de fondos de pantalla para Sway v{utils.VERSION}")
     print("\nUso:")
     print(f"  {script_name}                - Inicia en modo interactivo con rofi.")
     print(f"  {script_name} --auto         - Inicia el modo de rotación automática.")
     print(f"  {script_name} --set <ruta>   - Establece un fondo de pantalla específico.")
     print(f"  {script_name} --quiet        - Suprime las notificaciones (solo con --set y --auto).")
+    print(f"  {script_name} --version, -v  - Muestra la versión del script.")
     print(f"  {script_name} --help, -h     - Muestra este mensaje de ayuda.")
     print("\nConfiguración:")
     print(f"  El archivo de configuración se encuentra en: {utils.CONFIG_FILE}")
@@ -109,6 +110,10 @@ def main():
     utils.check_dependencies()
     config = utils.get_config()
     args = sys.argv[1:]
+
+    if '--version' in args or '-v' in args:
+        print(f"sway-wallpaper-manager v{utils.VERSION}")
+        return
 
     quiet_mode = '--quiet' in args or '--no-notify' in args
     if quiet_mode:
@@ -126,7 +131,7 @@ def main():
         automode.start_auto_mode(config, utils.get_image_files, wallpaper_setter)
     elif args[0] == '--set' and len(args) > 1:
         image_path = Path(args[1]).expanduser()
-        supported_extensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".webp"]
+        supported_extensions = [ext.replace("*", "") for ext in utils.SUPPORTED_EXTENSIONS]
         
         if not image_path.is_file():
             error_msg = f"El archivo '{image_path}' no existe."
