@@ -161,3 +161,49 @@ def manage_persistence(command_to_persist: str) -> None:
     except IOError as e:
         logging.error(f"Error al leer/escribir el archivo de configuración de Sway: {e}")
         send_notification("Error de Persistencia", "No se pudo modificar el archivo de configuración de Sway.", "dialog-error")
+
+def disable_persistence() -> None:
+    """Deshabilita la persistencia eliminando el script y la línea del config de Sway."""
+    # Eliminar el script restore.sh
+    if RESTORE_SCRIPT_PATH.exists():
+        try:
+            RESTORE_SCRIPT_PATH.unlink()
+            logging.info(f"Script de restauración eliminado: {RESTORE_SCRIPT_PATH}")
+        except OSError as e:
+            logging.error(f"No se pudo eliminar el script de restauración: {e}")
+            send_notification("Error al Deshabilitar", "No se pudo eliminar el script de restauración.", "dialog-error")
+            return
+    else:
+        logging.info("El script de restauración no existe. Nada que eliminar.")
+
+    # Eliminar la línea de exec_always del config de Sway
+    if not SWAY_CONFIG_FILE.exists():
+        logging.warning(f"Archivo de configuración de Sway no encontrado en '{SWAY_CONFIG_FILE}'. No hay persistencia que deshabilitar.")
+        send_notification("Error al Deshabilitar", "Archivo de configuración de Sway no encontrado.", "dialog-warning")
+        return
+
+    try:
+        lines = SWAY_CONFIG_FILE.read_text().splitlines()
+        new_lines = []
+        removed = False
+        skip_next = False
+        for i, line in enumerate(lines):
+            if f"exec_always \"{RESTORE_SCRIPT_PATH}\"" in line:
+                removed = True
+                # Intentar también eliminar el comentario si está justo antes
+                if i > 0 and lines[i-1].strip() == "# Sway Wallpaper Manager Persistence":
+                    new_lines.pop() # Eliminar la línea de comentario anterior
+                continue
+            new_lines.append(line)
+        
+        if removed:
+            SWAY_CONFIG_FILE.write_text("\n".join(new_lines) + "\n")
+            logging.info(f"Línea de persistencia eliminada de '{SWAY_CONFIG_FILE}'")
+            send_notification("Persistencia Deshabilitada", "El fondo de pantalla ya no se restaurará al iniciar Sway.", "dialog-information")
+        else:
+            logging.info("La línea de persistencia no se encontró en la configuración de Sway. Nada que deshabilitar.")
+            send_notification("Persistencia No Encontrada", "La persistencia no estaba configurada.", "dialog-information")
+
+    except IOError as e:
+        logging.error(f"Error al leer/escribir el archivo de configuración de Sway: {e}")
+        send_notification("Error al Deshabilitar", "No se pudo modificar el archivo de configuración de Sway.", "dialog-error")
