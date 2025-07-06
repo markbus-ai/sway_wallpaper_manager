@@ -6,7 +6,7 @@ Gestor de fondos de pantalla para Sway, con selección interactiva vía Rofi, ro
 
 1.  **Clonar el repositorio:**
     ```bash
-    git clone https://github.com/tu_usuario/sway_wallpaper_manager.git
+    git clone https://github.com/markbus-ai/sway_wallpaper_manager.git
     cd sway_wallpaper_manager
     ```
 2.  **Ejecutar el script de instalación:**
