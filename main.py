@@ -98,6 +98,7 @@ def print_help():
     print(f"  {script_name} --auto         - Inicia el modo de rotación automática.")
     print(f"  {script_name} --set <ruta>   - Establece un fondo de pantalla específico.")
     print(f"  {script_name} --quiet        - Suprime las notificaciones (solo con --set y --auto).")
+    print(f"  {script_name} --persist      - Guarda el fondo actual o el modo automático para restaurar al inicio de Sway.")
     print(f"  {script_name} --version, -v  - Muestra la versión del script.")
     print(f"  {script_name} --help, -h     - Muestra este mensaje de ayuda.")
     print("\nConfiguración:")
@@ -122,6 +123,10 @@ def main():
         if '--no-notify' in args:
             args.remove('--no-notify')
 
+    persist_mode = '--persist' in args
+    if persist_mode:
+        args.remove('--persist')
+
     if not args:
         main_interactive(config)
     elif args[0] in ['--help', '-h']:
@@ -129,6 +134,8 @@ def main():
     elif args[0] == '--auto':
         wallpaper_setter = partial(set_wallpaper, quiet=quiet_mode)
         automode.start_auto_mode(config, utils.get_image_files, wallpaper_setter)
+        if persist_mode:
+            utils.manage_persistence(f"python {Path(__file__).resolve()} --auto --quiet")
     elif args[0] == '--set' and len(args) > 1:
         image_path = Path(args[1]).expanduser()
         supported_extensions = [ext.replace("*", "") for ext in utils.SUPPORTED_EXTENSIONS]
@@ -143,8 +150,12 @@ def main():
             utils.send_notification("Error", error_msg, "dialog-error")
         else:
             set_wallpaper(image_path, config, quiet=quiet_mode)
+            if persist_mode:
+                swaybg_cmd = f"swaybg -o {config['swaybg_output']} -i {str(image_path)} -m {config['swaybg_mode']}"
+                utils.manage_persistence(swaybg_cmd)
     else:
         logging.error(f"Argumento no válido: '{args[0]}'. Usa '--help' para ver las opciones.")
 
 if __name__ == "__main__":
     main()
+
