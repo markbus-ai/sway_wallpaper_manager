@@ -10,6 +10,8 @@ import sys
 import logging
 from pathlib import Path
 from functools import partial
+from utils import save_last_wallpaper
+
 
 # Importaciones de nuestros módulos locales
 import utils
@@ -27,7 +29,9 @@ def set_wallpaper(image_path: Path, config: dict, quiet: bool = False):
     swaybg_cmd = [
         'swaybg', '-o', config['swaybg_output'], '-i', str(image_path), '-m', config['swaybg_mode']
     ]
-    utils.run_command(swaybg_cmd)
+    utils.run_command(swaybg_cmd, background=True)
+    utils.save_last_wallpaper(image_path)
+
 
     if not quiet:
         logging.info("Generando paleta de colores con pywal...")
@@ -42,7 +46,7 @@ def set_wallpaper(image_path: Path, config: dict, quiet: bool = False):
         )
         logging.info("¡Listo!")
 
-def main_interactive(config: dict):
+def main_interactive(config: dict, persist_mode: bool = False):
     """Lanza el modo interactivo usando rofi con miniaturas."""
     images = utils.get_image_files(config['wallpaper_folder'])
     if not images:
@@ -86,6 +90,8 @@ def main_interactive(config: dict):
     if selected_image_path:
         # Al seleccionar, se aplica directamente el fondo.
         set_wallpaper(selected_image_path, config)
+        if persist_mode:
+            utils.manage_persistence()
     else:
         logging.error(f"No se encontró la imagen para '{selected_filename}'")
 
@@ -132,14 +138,14 @@ def main():
         args.remove('--persist')
 
     if not args:
-        main_interactive(config)
+        main_interactive(config, persist_mode=persist_mode)
     elif args[0] in ['--help', '-h']:
         print_help()
     elif args[0] == '--auto':
         wallpaper_setter = partial(set_wallpaper, quiet=quiet_mode)
         automode.start_auto_mode(config, utils.get_image_files, wallpaper_setter)
         if persist_mode:
-            utils.manage_persistence(f"python {Path(__file__).resolve()} --auto --quiet")
+            utils.manage_persistence()
     elif args[0] == '--set' and len(args) > 1:
         image_path = Path(args[1]).expanduser()
         supported_extensions = [ext.replace("*", "") for ext in utils.SUPPORTED_EXTENSIONS]
@@ -155,8 +161,7 @@ def main():
         else:
             set_wallpaper(image_path, config, quiet=quiet_mode)
             if persist_mode:
-                swaybg_cmd = f"swaybg -o {config['swaybg_output']} -i {str(image_path)} -m {config['swaybg_mode']}"
-                utils.manage_persistence(swaybg_cmd)
+                utils.manage_persistence()
     else:
         logging.error(f"Argumento no válido: '{args[0]}'. Usa '--help' para ver las opciones.")
 

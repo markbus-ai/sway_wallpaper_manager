@@ -103,10 +103,13 @@ def get_thumbnail(image_path: Path) -> Path:
     
     return thumbnail_path
 
-def run_command(command: list[str], **kwargs):
-    """Ejecuta un comando en el sistema."""
+def run_command(command: list[str], background: bool = False, **kwargs):
+    """Ejecuta un comando en el sistema. Si background=True, no espera a que termine."""
     try:
-        return subprocess.run(command, check=True, **kwargs)
+        if background:
+            return subprocess.Popen(command, **kwargs)
+        else:
+            return subprocess.run(command, check=True, **kwargs)
     except FileNotFoundError:
         logging.error(f"El comando '{command[0]}' no se encontró.")
         return None
@@ -125,15 +128,37 @@ def send_notification(title: str, message: str, icon: str = "dialog-information"
     except FileNotFoundError:
         logging.warning(f"El comando 'notify-send' no se encontró. Notificación: {title} - {message}")
 
-def manage_persistence(command_to_persist: str) -> None:
-    """Gestiona la persistencia del comando en el archivo de configuración de Sway."""
+def manage_persistence() -> None:
+    """Genera un script restore.sh que lee la ruta del fondo dinámicamente y usa la config actual."""
     SWAY_WM_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Leer la configuración actual para swaybg
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE)
+    settings = config['Settings']
+    swaybg_output = settings.get('swaybg_output', '*')
+    swaybg_mode = settings.get('swaybg_mode', 'fill')
+
     try:
+        restore_script = f'''#!/bin/bash
+
+WALLPAPER_FILE="{LAST_WALLPAPER_FILE}"
+if [ -f "$WALLPAPER_FILE" ]; then
+    WALLPAPER_PATH=$(cat "$WALLPAPER_FILE")
+    pkill -f swaybg
+    sleep 1
+    # Reintento hasta 3 veces si swaybg falla
+    for i in 1 2 3; do
+        swaybg -o "{swaybg_output}" -i "$WALLPAPER_PATH" -m {swaybg_mode} && break
+        sleep 1
+    done
+else
+    echo "No se encontró el fondo guardado en $WALLPAPER_FILE" >&2
+fi
+'''
         with open(RESTORE_SCRIPT_PATH, 'w') as f:
-            f.write("#!/bin/bash\n")
-            f.write(f"{command_to_persist}\n")
-        RESTORE_SCRIPT_PATH.chmod(0o755) # Make it executable
+            f.write(restore_script)
+        RESTORE_SCRIPT_PATH.chmod(0o755)
         logging.info(f"Script de restauración creado en '{RESTORE_SCRIPT_PATH}'")
     except IOError as e:
         logging.error(f"No se pudo crear el script de restauración: {e}")
@@ -141,25 +166,25 @@ def manage_persistence(command_to_persist: str) -> None:
         return
 
     if not SWAY_CONFIG_FILE.exists():
-        logging.warning(f"Archivo de configuración de Sway no encontrado en '{SWAY_CONFIG_FILE}'. No se puede configurar la persistencia.")
+        logging.warning(f"Archivo de configuración de Sway no encontrado en '{SWAY_CONFIG_FILE}'.")
         send_notification("Error de Persistencia", "Archivo de configuración de Sway no encontrado.", "dialog-warning")
         return
 
     try:
         sway_config_content = SWAY_CONFIG_FILE.read_text()
-        exec_line = f"exec_always \"{RESTORE_SCRIPT_PATH}\""
+        exec_line = f'exec_always "{RESTORE_SCRIPT_PATH}"'
 
         if exec_line not in sway_config_content:
             with open(SWAY_CONFIG_FILE, 'a') as f:
                 f.write(f"\n# Sway Wallpaper Manager Persistence\n{exec_line}\n")
             logging.info(f"Línea de persistencia añadida a '{SWAY_CONFIG_FILE}'")
-            send_notification("Persistencia Configurada", "El fondo de pantalla se restaurará al iniciar Sway.", "dialog-information")
+            send_notification("Persistencia Configurada", "El fondo se restaurará al iniciar Sway.", "dialog-information")
         else:
-            logging.info("La línea de persistencia ya existe en la configuración de Sway.")
-            send_notification("Persistencia Existente", "El fondo de pantalla ya está configurado para restaurarse.", "dialog-information")
+            logging.info("La línea de persistencia ya existe.")
+            send_notification("Persistencia Existente", "El fondo ya está configurado para restaurarse.", "dialog-information")
 
     except IOError as e:
-        logging.error(f"Error al leer/escribir el archivo de configuración de Sway: {e}")
+        logging.error(f"Error al modificar el config de Sway: {e}")
         send_notification("Error de Persistencia", "No se pudo modificar el archivo de configuración de Sway.", "dialog-error")
 
 def disable_persistence() -> None:
@@ -207,3 +232,15 @@ def disable_persistence() -> None:
     except IOError as e:
         logging.error(f"Error al leer/escribir el archivo de configuración de Sway: {e}")
         send_notification("Error al Deshabilitar", "No se pudo modificar el archivo de configuración de Sway.", "dialog-error")
+LAST_WALLPAPER_FILE = SWAY_WM_CONFIG_DIR / 'last_wallpaper.txt'
+
+def save_last_wallpaper(image_path: Path) -> None:
+    """Guarda la ruta del último fondo de pantalla usado."""
+    SWAY_WM_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(LAST_WALLPAPER_FILE, 'w') as f:
+            f.write(str(image_path))
+        logging.info(f"Ruta del fondo guardada en '{LAST_WALLPAPER_FILE}'")
+    except IOError as e:
+        logging.error(f"No se pudo guardar la ruta del fondo: {e}")
+        send_notification("Error", "No se pudo guardar el fondo actual.", "dialog-error")
